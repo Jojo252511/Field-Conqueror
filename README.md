@@ -28,7 +28,7 @@ Um das Spiel lokal zu betreiben, befolge diese Schritte:
 
 ### 1. Backend Setup
 
-1.  **Code herunterladen/klonen:** Lade die Backend-Datei (`server.js` oder `main.js`) herunter oder klone das Repository, falls vorhanden.
+1.  **Code herunterladen/klonen:** Lade die Backend-Datei (`server.js`) herunter oder klone das Repository.
 2.  **Abhängigkeiten installieren:**
     * Öffne ein Terminal oder eine Kommandozeile.
     * Navigiere in den Ordner, in dem sich die Backend-Datei befindet.
@@ -41,13 +41,12 @@ Um das Spiel lokal zu betreiben, befolge diese Schritte:
         ```bash
         node server.js 
         ```
-        (oder `node main.js`, je nachdem, wie deine Backend-Datei heißt)
     * Der Server sollte nun laufen und auf Port `8080` auf Verbindungen warten. Du siehst eine Meldung wie `WebSocket-Server gestartet auf Port 8080`.
 
 ### 2. Frontend Setup
 
 1.  **HTML-Datei öffnen:**
-    * Lade die Frontend-HTML-Datei (`index.html` oder wie du sie genannt hast) herunter.
+    * Lade die Frontend-HTML-Datei (`index.html`) herunter.
     * Öffne diese Datei in deinem Webbrowser (Doppelklick auf die Datei oder "Datei öffnen" im Browser-Menü).
 2.  **Mit dem Server verbinden:**
     * Gib deinen gewünschten Spielernamen ein und wähle eine Farbe.
@@ -74,4 +73,4 @@ Um das Spiel lokal zu betreiben, befolge diese Schritte:
 
 ## 📄 Lizenz
 
-Dieses Projekt ist für den persönlichen und Lerngebrauch gedacht. Du kannst es gerne anpassen und erweitern.
+Dieses Projekt ist für den persönlichen gebrauch gedacht. Du kannst es gerne anpassen und erweitern.
