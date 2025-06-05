@@ -1,0 +1,4 @@
+node_modiles/
+dist/
+coverage/
+.env
