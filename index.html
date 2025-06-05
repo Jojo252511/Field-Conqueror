@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feld Eroberer - Multiplayer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #f0f4f8; overflow: hidden; }
+        .game-container { display: flex; flex-direction: column; align-items: center; background-color: white; padding: 20px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); max-width: 95vw; overflow-y: auto;}
+        .main-game-area { display: flex; flex-direction: column; align-items: center; width: 100%; margin-top: 10px; }
+        /* Responsive Anpassung für kleinere Bildschirme */
+        @media (min-width: 768px) {
+            .main-game-area { flex-direction: row; align-items: flex-start; }
+        }
+        #leaderboard { width: 100%; max-width: 300px; margin-bottom: 15px; padding: 15px; background-color: #e2e8f0; border-radius: 8px; order: 1; }
+        @media (min-width: 768px) {
+            #leaderboard { width: 200px; margin-right: 20px; margin-bottom: 0; order: 0; }
+        }
+        #leaderboard h3 { margin-top: 0; text-align: center; color: #2d3748; }
+        #leaderboard ul { list-style-type: none; padding: 0; }
+        #leaderboard li { background-color: #f7fafc; margin-bottom: 8px; padding: 8px; border-radius: 4px; font-size: 0.9em; display: flex; justify-content: space-between; }
+        #gameCanvas { border: 1px solid #cbd5e0; border-radius: 8px; display: block; /* Wird von JS dimensioniert */ order: 0;}
+         @media (min-width: 768px) {
+            #gameCanvas { order: 1; }
+        }
+        .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; padding: 15px; background-color: #f8fafc; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .control-group { display: flex; flex-direction: column; }
+        .control-group label { margin-bottom: 5px; font-size: 0.9em; color: #4a5568; }
+        .control-group input, .control-group select { padding: 8px; border-radius: 6px; border: 1px solid #cbd5e0; font-size: 0.9em; }
+        .control-group input[type="color"] { padding: 0; height: 38px; width: 50px; }
+        #connectButton, #startButton { background-color: #4c51bf; color: white; padding: 10px 15px; border-radius: 6px; border: none; cursor: pointer; font-size: 1em; transition: background-color 0.3s; }
+        #connectButton:hover, #startButton:hover { background-color: #434190; }
+        #connectButton:disabled, #startButton:disabled { background-color: #a0aec0; cursor: not-allowed; }
+        #timer { font-size: 1.5em; font-weight: bold; margin-bottom: 10px; color: #2d3748; text-align: center; }
+        .status-message { text-align: center; margin-bottom: 10px; color: #718096; font-style: italic; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; padding: 15px; }
+        .modal-content { background-color: white; padding: 20px; border-radius: 12px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-width: 400px; width: 100%;}
+        .modal-content h2 { margin-top: 0; color: #2d3748; }
+        .modal-content button { background-color: #4c51bf; color: white; padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; font-size: 1em; margin-top: 20px; }
+        .modal-content button:hover { background-color: #434190; }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1 class="text-3xl font-bold text-gray-700 mb-3">Feld Eroberer - Multiplayer</h1>
+
+        <div id="connectionStatus" class="status-message">Nicht verbunden.</div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="playerName">Dein Name:</label>
+                <input type="text" id="playerName" value="Spieler" class="rounded-md">
+            </div>
+            <div class="control-group">
+                <label for="playerColor">Deine Farbe:</label>
+                <input type="color" id="playerColor" value="#3B82F6" class="rounded-md">
+            </div>
+            <button id="connectButton" class="rounded-md">Mit Server verbinden</button>
+        </div>
+        
+        <div class="controls" id="gameControls" style="display: none;">
+             <div class="control-group">
+                <label for="gameTime">Spielzeit (Minuten):</label>
+                <input type="number" id="gameTime" value="1" min="1" max="15" class="rounded-md w-20">
+            </div>
+            <button id="startButton" class="rounded-md">Spiel Starten</button>
+        </div>
+
+
+        <div id="timer">Zeit: --:--</div>
+
+        <div class="main-game-area mt-2">
+            <div id="leaderboard" class="rounded-lg">
+                <h3>Leaderboard</h3>
+                <ul id="playerList">
+                    <!-- Spieler werden hier dynamisch hinzugefügt -->
+                </ul>
+            </div>
+            <canvas id="gameCanvas"></canvas>
+        </div>
+    </div>
+
+    <div id="messageModal" class="modal-overlay">
+        <div class="modal-content rounded-lg">
+            <h2 id="messageModalTitle">Nachricht</h2>
+            <p id="messageModalText"></p>
+            <button id="messageModalCloseButton">OK</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const leaderboardList = document.getElementById('playerList');
+        const playerNameInput = document.getElementById('playerName');
+        const playerColorInput = document.getElementById('playerColor');
+        const gameTimeInput = document.getElementById('gameTime');
+        const connectButton = document.getElementById('connectButton');
+        const startButton = document.getElementById('startButton');
+        const timerDisplay = document.getElementById('timer');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const gameControls = document.getElementById('gameControls');
+
+        const messageModal = document.getElementById('messageModal');
+        const messageModalTitle = document.getElementById('messageModalTitle');
+        const messageModalText = document.getElementById('messageModalText');
+        const messageModalCloseButton = document.getElementById('messageModalCloseButton');
+
+        const TILE_SIZE = 20;
+        const GRID_WIDTH_TILES = 30;
+        const GRID_HEIGHT_TILES = 25;
+
+        canvas.width = TILE_SIZE * GRID_WIDTH_TILES;
+        canvas.height = TILE_SIZE * GRID_HEIGHT_TILES;
+
+        let localPlayerId = null; // Eigene Spieler-ID vom Server
+        let players = {}; // Lokale Kopie aller Spielerdaten { id: { x, y, color, name, score } }
+        let gameGrid = []; // Lokale Kopie des Spielfelds
+        let gameActive = false;
+        let socket;
+
+        function initLocalGrid() {
+            gameGrid = [];
+            for (let y = 0; y < GRID_HEIGHT_TILES; y++) {
+                const row = [];
+                for (let x = 0; x < GRID_WIDTH_TILES; x++) {
+                    row.push(null);
+                }
+                gameGrid.push(row);
+            }
+        }
+        initLocalGrid(); // Initial leeres Gitter zeichnen
+
+        function showModal(title, text) {
+            messageModalTitle.textContent = title;
+            messageModalText.textContent = text;
+            messageModal.style.display = 'flex';
+        }
+        messageModalCloseButton.addEventListener('click', () => {
+            messageModal.style.display = 'none';
+        });
+
+        function connectToServer() {
+            // IP-Adresse vom Benutzer abfragen
+            const serverIp = prompt("Bitte gib die IP-Adresse des Servers ein:", "localhost");
+            if (!serverIp) { // Benutzer hat Abbrechen geklickt oder nichts eingegeben
+                connectionStatus.textContent = 'Verbindung abgebrochen.';
+                return;
+            }
+
+            const serverAddress = `ws://${serverIp.trim()}:8080`; 
+            
+            socket = new WebSocket(serverAddress);
+            connectionStatus.textContent = `Verbinde mit ${serverAddress}...`;
+            connectButton.disabled = true;
+
+            socket.onopen = () => {
+                connectionStatus.textContent = 'Verbunden! Warte auf Spieler-Setup...';
+                console.log('WebSocket-Verbindung hergestellt.');
+            };
+
+            socket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                // console.log('Nachricht vom Server:', data);
+
+                switch (data.type) {
+                    case 'init':
+                        localPlayerId = data.playerId;
+                        gameActive = data.gameActive; 
+                        gameTimeInput.value = data.gameTimeMinutes || 1;
+
+                        players = {}; 
+                        data.players.forEach(p => players[p.id] = p);
+                        
+                        if(data.grid && data.grid.length > 0) {
+                            gameGrid = data.grid;
+                        } else {
+                            initLocalGrid();
+                        }
+                        
+                        updateLeaderboard();
+                        drawGame();
+
+                        const playerName = playerNameInput.value || `Spieler ${Object.keys(players).length +1}`;
+                        const playerColor = playerColorInput.value;
+                        socket.send(JSON.stringify({ type: 'playerJoin', name: playerName, color: playerColor }));
+                        
+                        playerNameInput.disabled = true;
+                        playerColorInput.disabled = true;
+                        connectButton.style.display = 'none'; // Verstecke den Connect-Button nach erfolgreicher Verbindung
+                        gameControls.style.display = 'flex';
+                        if(gameActive) {
+                             connectionStatus.textContent = `Spiel läuft (ID: ${localPlayerId}).`;
+                             startButton.disabled = true; 
+                        } else {
+                             connectionStatus.textContent = `Verbunden als ${playerName} (ID: ${localPlayerId}). Warte auf Spielstart.`;
+                             startButton.disabled = false;
+                        }
+                        break;
+                    
+                    case 'playerJoined':
+                        players[data.player.id] = data.player;
+                        if (data.player.id === localPlayerId) {
+                             connectionStatus.textContent = `Du bist beigetreten als ${data.player.name}! (ID: ${localPlayerId})`;
+                        }
+                        console.log('Spieler beigetreten:', data.player.name);
+                        updateLeaderboard();
+                        drawGame();
+                        break;
+
+                    case 'playerLeft':
+                        console.log('Spieler verlassen:', players[data.playerId]?.name);
+                        delete players[data.playerId];
+                        updateLeaderboard();
+                        drawGame();
+                        break;
+
+                    case 'playerUpdate':
+                        if (players[data.player.id]) {
+                            Object.assign(players[data.player.id], data.player);
+                        } else { 
+                            players[data.player.id] = data.player;
+                        }
+                        players[data.player.id].score = data.player.score;
+                        updateLeaderboard(); 
+                        drawGame();
+                        break;
+
+                    case 'gridUpdate':
+                        if (data.y < GRID_HEIGHT_TILES && data.x < GRID_WIDTH_TILES) {
+                            gameGrid[data.y][data.x] = { color: data.color, ownerId: data.ownerId };
+                            drawGame();
+                        }
+                        break;
+                    
+                    case 'leaderboardUpdate':
+                        data.leaderboard.forEach(serverPlayer => {
+                            if(players[serverPlayer.id]) {
+                                players[serverPlayer.id].score = serverPlayer.score;
+                            }
+                        });
+                        leaderboardList.innerHTML = ''; 
+                        data.leaderboard.forEach(p => {
+                            const listItem = document.createElement('li');
+                            listItem.style.borderLeft = `5px solid ${p.color}`;
+                            const nameSpan = document.createElement('span');
+                            nameSpan.textContent = p.name;
+                            nameSpan.style.color = p.color; 
+                            const scoreSpan = document.createElement('span');
+                            scoreSpan.textContent = p.score;
+                            listItem.appendChild(nameSpan);
+                            listItem.appendChild(scoreSpan);
+                            leaderboardList.appendChild(listItem);
+                        });
+                        break;
+
+                    case 'gameStart':
+                        gameActive = true;
+                        gameGrid = data.grid; 
+                        players = {}; 
+                        data.players.forEach(p => players[p.id] = p);
+
+                        timerDisplay.textContent = `Zeit: ${formatTime(data.remainingTime)}`;
+                        startButton.disabled = true;
+                        gameTimeInput.disabled = true;
+                        connectionStatus.textContent = 'Spiel läuft!';
+                        showModal("Spielstart!", "Das Spiel hat begonnen. Erobert die Felder!");
+                        updateLeaderboard();
+                        drawGame();
+                        break;
+                    
+                    case 'timerUpdate':
+                        timerDisplay.textContent = `Zeit: ${data.time}`;
+                        break;
+
+                    case 'gameOver':
+                        gameActive = false;
+                        startButton.disabled = false; 
+                        gameTimeInput.disabled = false;
+                        connectionStatus.textContent = 'Spiel beendet. Bereit für eine neue Runde!';
+                        let winnerInfo = data.message;
+                        if (data.scores && data.scores.length > 0) {
+                             console.log("Finale Scores:", data.scores);
+                        }
+                        showModal("Spiel Vorbei!", winnerInfo);
+                        updateLeaderboard(); 
+                        break;
+                    
+                    case 'error':
+                        console.error('Fehler vom Server:', data.message);
+                        showModal("Fehler", data.message);
+                        if (!gameActive) {
+                            startButton.disabled = false;
+                            connectButton.disabled = false; 
+                            playerNameInput.disabled = false;
+                            playerColorInput.disabled = false;
+                            connectButton.style.display = 'block'; // Zeige Connect-Button wieder an
+                            gameControls.style.display = 'none';
+                        }
+                        connectionStatus.textContent = `Fehler: ${data.message}. Bitte neu verbinden.`;
+                        if (socket && socket.readyState === WebSocket.OPEN) { // Schließe nur, wenn offen
+                           socket.close(); 
+                        }
+                        break;
+                }
+            };
+
+            socket.onclose = () => {
+                connectionStatus.textContent = 'Verbindung zum Server getrennt.';
+                console.log('WebSocket-Verbindung geschlossen.');
+                gameActive = false;
+                connectButton.disabled = false;
+                startButton.disabled = true;
+                playerNameInput.disabled = false;
+                playerColorInput.disabled = false;
+                connectButton.style.display = 'block'; // Zeige Connect-Button wieder an
+                gameControls.style.display = 'none';
+                if (!messageModal.style.display || messageModal.style.display === 'none') { // Zeige Modal nur, wenn nicht schon eins aktiv ist
+                    showModal("Verbindung getrennt", "Die Verbindung zum Server wurde unterbrochen.");
+                }
+            };
+
+            socket.onerror = (error) => {
+                connectionStatus.textContent = 'Verbindungsfehler!';
+                console.error('WebSocket-Fehler:', error);
+                connectButton.disabled = false;
+                showModal("Verbindungsfehler", "Konnte keine Verbindung zum Server herstellen. Läuft der Server und ist die IP korrekt?");
+            };
+        }
+        connectButton.addEventListener('click', connectToServer);
+
+
+        function drawGrid() {
+            for (let y = 0; y < GRID_HEIGHT_TILES; y++) {
+                for (let x = 0; x < GRID_WIDTH_TILES; x++) {
+                    const tileData = gameGrid[y] ? gameGrid[y][x] : null; 
+                    if (tileData && tileData.color) {
+                        ctx.fillStyle = tileData.color;
+                        ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                    } else {
+                        ctx.fillStyle = '#FFFFFF'; 
+                        ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        ctx.strokeStyle = '#e0e0e0';
+                        ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                    }
+                }
+            }
+        }
+
+        function drawPlayer(p) {
+            if (!p || p.x === undefined || p.y === undefined) return; 
+            ctx.fillStyle = p.color;
+            ctx.fillRect(p.x * TILE_SIZE, p.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            if (gameGrid[p.y] && gameGrid[p.y][p.x] && gameGrid[p.y][p.x].color === p.color) {
+                 ctx.strokeStyle = 'rgba(0,0,0,0.3)'; 
+            } else {
+                 ctx.strokeStyle = 'black'; 
+            }
+            ctx.lineWidth = 2;
+            ctx.strokeRect(p.x * TILE_SIZE, p.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            ctx.lineWidth = 1;
+        }
+        
+        function drawGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawGrid();
+            Object.values(players).forEach(p => drawPlayer(p));
+        }
+
+        function updateLeaderboard() {
+            const playerArray = Object.values(players).sort((a, b) => (b.score || 0) - (a.score || 0));
+            leaderboardList.innerHTML = ''; 
+            playerArray.forEach(p => {
+                 if (!p.name || p.score === undefined) return; 
+                const listItem = document.createElement('li');
+                listItem.style.borderLeft = `5px solid ${p.color}`;
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = p.name;
+                nameSpan.style.color = p.color;
+                const scoreSpan = document.createElement('span');
+                scoreSpan.textContent = p.score;
+                listItem.appendChild(nameSpan);
+                listItem.appendChild(scoreSpan);
+                leaderboardList.appendChild(listItem);
+            });
+        }
+
+
+        function handleKeyDown(e) {
+            if (!gameActive || !localPlayerId || !socket || socket.readyState !== WebSocket.OPEN) return;
+
+            let direction = null;
+            switch (e.key) {
+                case 'ArrowUp': case 'w': direction = 'up'; break;
+                case 'ArrowDown': case 's': direction = 'down'; break;
+                case 'ArrowLeft': case 'a': direction = 'left'; break;
+                case 'ArrowRight': case 'd': direction = 'right'; break;
+            }
+            if (direction) {
+                e.preventDefault(); 
+                socket.send(JSON.stringify({ type: 'move', direction: direction }));
+            }
+        }
+        window.addEventListener('keydown', handleKeyDown);
+
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        startButton.addEventListener('click', () => {
+            if (socket && socket.readyState === WebSocket.OPEN && !gameActive) {
+                const time = parseInt(gameTimeInput.value);
+                if (isNaN(time) || time < 1 || time > 15) {
+                    showModal("Fehler", "Ungültige Spielzeit. Bitte wähle zwischen 1 und 15 Minuten.");
+                    return;
+                }
+                socket.send(JSON.stringify({ type: 'startGame', gameTimeMinutes: time }));
+                startButton.disabled = true; 
+                connectionStatus.textContent = 'Sende Spielstart-Anfrage...';
+            } else {
+                showModal("Fehler", "Keine Verbindung zum Server oder Spiel läuft bereits.");
+            }
+        });
+        
+        drawGame(); 
+        updateLeaderboard();
+    </script>
+</body>
+</html>
+
